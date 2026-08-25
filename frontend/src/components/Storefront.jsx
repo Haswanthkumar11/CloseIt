@@ -6,6 +6,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { ShieldCheck, Truck, RotateCcw, Star, Zap, CreditCard, ArrowRight, BarChart2, Check, Loader2 } from 'lucide-react';
+import { API_BASE } from '../config';
 
 export function Storefront({
   selectedProduct,
@@ -28,7 +29,7 @@ export function Storefront({
     const fetchCatalog = async () => {
       setLoading(true);
       try {
-        const res = await fetch('/api/products');
+        const res = await fetch(`${API_BASE}/products`);
         if (res.ok) {
           const data = await res.json();
           setProducts(data.products || []);

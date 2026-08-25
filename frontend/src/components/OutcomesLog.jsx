@@ -6,6 +6,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { RefreshCw, CheckCircle, DollarSign, AlertCircle, ShoppingBag } from 'lucide-react';
+import { API_BASE } from '../config';
 
 export function OutcomesLog() {
   const [data, setData] = useState({
@@ -21,7 +22,7 @@ export function OutcomesLog() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/outcomes');
+      const res = await fetch(`${API_BASE}/outcomes`);
       if (!res.ok) throw new Error(`HTTP error ${res.status}`);
       const json = await res.json();
       setData(json);

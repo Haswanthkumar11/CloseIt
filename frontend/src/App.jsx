@@ -10,6 +10,7 @@ import { ChatWidget } from './components/ChatWidget';
 import { OutcomesLog } from './components/OutcomesLog';
 import { useExitIntent } from './hooks/useExitIntent';
 import { Zap, BarChart2, ShoppingBag } from 'lucide-react';
+import { API_BASE } from './config';
 
 export function App() {
   // Sync tab with URL hash/pathname for direct navigation (e.g. /outcomes or #outcomes)
@@ -51,7 +52,7 @@ export function App() {
   const startProductSession = async (product) => {
     if (!product) return;
     try {
-      const res = await fetch('/api/session/start', {
+      const res = await fetch(`${API_BASE}/session/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

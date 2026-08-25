@@ -6,6 +6,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Send, Bot, ExternalLink, Sparkles, Tag, CreditCard, CheckCircle2, ShoppingBag } from 'lucide-react';
+import { API_BASE } from '../config';
 
 export function ChatWidget({
   isOpen,
@@ -68,7 +69,7 @@ export function ChatWidget({
     setIsTyping(true);
 
     try {
-      const response = await fetch('/api/chat', {
+      const response = await fetch(`${API_BASE}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -125,7 +126,7 @@ export function ChatWidget({
     window.open(url, '_blank', 'noopener,noreferrer');
 
     try {
-      await fetch('/api/log-outcome', {
+      await fetch(`${API_BASE}/log-outcome`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
