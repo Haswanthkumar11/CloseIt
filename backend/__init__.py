@@ -1,0 +1,3 @@
+"""
+CloseIt Backend Application Package.
+"""
