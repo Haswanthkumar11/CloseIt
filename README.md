@@ -1,64 +1,94 @@
-# CloseIt — Agentic Checkout-Rescue Assistant
+# CloseIt — Agentic Checkout & Revenue Recovery Assistant
 
 **Razorpay AI Builder Internship 2026 — Track 1: AI Growth & Agentic Commerce**
 
 ## Problem
 
-Most online stores lose 60–70% of buyers at checkout — not because of price, but because
-of friction: too many steps, no personalized nudge, and no one to resolve last-second
-doubts ("is COD available?", "can I get EMI?"). Merchants have no way to intervene in
-the moment a shopper is about to abandon.
+Most online businesses lose revenue across the customer lifecycle — from cart abandonment at checkout to unpaid subscription renewals and overdue B2B invoices. Traditional reminders are passive notice emails ("Your invoice is overdue") that lack interactive negotiation or immediate payment resolution.
 
 ## Solution
 
-CloseIt is an AI agent embedded on a merchant's checkout page. It detects hesitation
-signals (mouse leaving the viewport, prolonged idle time, repeated back-navigation),
-opens a conversational chat, and actively works to close the sale:
+CloseIt is a unified, multi-context AI revenue recovery agent embedded across a merchant's storefront, subscription portal, and invoicing dashboard. It operates across **3 Commercial Contexts** under strict **Merchant Policy Guardrails**:
 
-- Answers real objections in natural language (shipping, refunds, EMI, COD)
-- Dynamically offers a resolution — a discount code or an alternate payment method —
-  based on the specific objection detected
-- Generates a live Razorpay Payment Link inside the chat so the user can complete
-  payment without leaving the conversation
-- Logs the objection type and outcome for every session, so merchants can see *why*
-  carts are recovered or lost
+1. **E-Commerce Checkout Rescue (`🛍️ Shop`)**: Intercepts shopper exit intent, resolves price/shipping friction, and offers policy-approved discounts or 3-Month Credit Payment Plans (20% down today) for storefront products.
+2. **Smart Recharge & Plan Rescue (`📱 Recharge`)**: Compares telecom recharge plans (Jio, Airtel, Vi) based on factual data (validity, OTT bundles, 5G), negotiates policy-approved discounts, and drives plan upgrades.
+3. **Customer Payment & Credit Hub (`💳 My Payments`)**: Connects storefront credit purchases directly into the customer's personal payment center. Displays upcoming installment alerts (₹1,333 due Oct 1), tracks purchase history, and lets CloseIt negotiate compliant payment plan extensions or partial downpayments.
 
-## Why This Is Different
+---
 
-Most "AI shopping assistant" entries are general-purpose product Q&A bots. CloseIt is
-narrow and metric-driven: it only activates at the moment of exit intent, it always
-drives toward one outcome (a completed payment), and it produces a business-relevant
-artifact — an objection log — that a merchant can act on. It's an agent with a job,
-not a chatbot with a personality.
+## Unified Multi-Context Architecture
 
-## Demo Flow (~3 minutes)
+```
+                         CLOSEIT
+              Revenue Recovery Agent Engine
+                            │
+                            ▼
+                   NEGOTIATION ENGINE
+                            │
+        ┌───────────────────┼───────────────────┐
+        │                   │                   │
+        ▼                   ▼                   ▼
+    CHECKOUT            SMART RECHARGE       INVOICE
+     RESCUE                 RESCUE          RECOVERY
+  (Storefront)         (Subscription)      (B2B Invoices)
+        │                   │                   │
+        └───────────────────┼───────────────────┘
+                            ▼
+                     POLICY ENGINE
+  (Max Cart Discount, Max Recharge Discount, Min 30% Partial Pay, Max 30d Extension)
+                            │
+                            ▼
+                   APPROVED ACTION
+                            │
+           ┌────────────────┼────────────────┐
+           ▼                ▼                ▼
+     Razorpay Links      Email Reminders   MongoDB Audit Trail
+```
 
-1. User adds an item to cart on the demo storefront
-2. User hesitates — moves mouse toward the tab bar / browser back button
-3. CloseIt chat opens: "Hey, before you go — is something holding you back?"
-4. User types an objection (e.g. "too expensive")
-5. Agent responds with a resolution (discount code, or switches UI to show EMI option)
-6. User agrees; agent generates a Razorpay test Payment Link and the user pays
-7. Session outcome logs to a simple results view: objection type, resolution offered,
-   recovered amount
+---
 
-## Tech Stack (all free-tier / open-source)
+## Key Security Rule: Policy Engine Authorization
 
-| Layer | Tool |
+The LLM may propose a commercial arrangement, but it is **NEVER authoritative for payment amounts, discount limits, due-date extensions, or policy authorization**. The backend and Policy Engine deterministically calculate and validate all values before any Razorpay Payment Link is created.
+
+---
+
+## 3 Demo Scenarios in Module 3 (Invoice Recovery)
+
+- **Scenario A — Partial Payment (Compliant)**:
+  - Client asks: *"I'm having cash-flow issues. Can I pay ₹4,000 now and the rest next month?"*
+  - Evaluation: ₹4,000 / ₹12,500 = 32% (≥ 30% min upfront requirement).
+  - Outcome: ✅ Approved -> Generates structured 30% down arrangement -> Razorpay link for ₹4,000.
+- **Scenario B — Due Date Extension (Compliant)**:
+  - Client asks: *"Can you give me another 15 days to pay the full amount?"*
+  - Evaluation: 15-day extension (≤ 30 days maximum limit).
+  - Outcome: ✅ Approved -> Updates due date -> Confirms extension.
+- **Scenario C — Excessive Request (Non-Compliant / Rejected)**:
+  - Client asks: *"Can I pay ₹1,000 now and the remaining amount after 90 days?"*
+  - Evaluation: 8% upfront (< 30% min limit) & 90 days (> 30d max limit).
+  - Outcome: ❌ Rejected with transparent policy explanation (*"Requires at least 30% upfront and max 30 days extension"*).
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
 |---|---|
-| LLM | Groq API (free tier) or Google Gemini free tier |
-| Agent logic | Plain function-calling — no paid framework required |
-| Payments | Razorpay Test Mode — Payment Links API |
-| Frontend | React (or plain HTML/JS) — hosted free on Vercel |
-| Backend | FastAPI or Node/Express — hosted free on Render/Railway |
-| Exit-intent detection | Vanilla JS (mouseleave, visibilitychange, idle timer) |
-| Session log | SQLite or a local JSON file (skip a dashboard unless time allows) |
+| **LLM & Function Calling** | Google Gemini 2.5 Flash / Groq API (Direct Function Calling) |
+| **Backend Engine** | Python FastAPI with CORS & Swagger UI (`/docs`) |
+| **Database & Persistence** | MongoDB Atlas (Async Motor driver) with 6 seeded collections |
+| **Payments** | Razorpay Test Mode — Payment Links API (`create_payment_link_service`) |
+| **Email Dispatch** | SMTP Email Reminders & Demo Simulation (`backend/services/email.py`) |
+| **Frontend UI** | React + Vite with Lucide icons & Glassmorphic CSS |
+| **Exit-Intent & Routing** | Dynamic context switching (`checkout`, `subscription`, `invoice`) |
+| **Policy Engine** | Strict backend validation rules (`policy_engine.py`) |
+| **Analytics Dashboard** | Outcomes Log table & Audit Trail view (`/outcomes`) |
 
-See `ARCHITECTURE.md` for system design and `PROJECT_SPEC.md` for the build plan and
-scope boundaries.
+---
 
-## Status
+## Status: ✅ All 3 Modules Implemented & Verified
 
-Solo build, hackathon-scoped. Target: ~14–16 hours across 2–3 days. Core flow
-(exit-intent → chat → objection handling → payment link → log) is the non-negotiable
-deliverable; everything else is a stretch goal.
+- [x] **Module 1: E-Commerce Checkout Rescue**: Exit intent detection, price objection resolution, EMI/UPI options, Razorpay links.
+- [x] **Module 2: Smart Recharge Rescue**: Factual plan comparison, OTT/5G bundle recommendation, policy discount negotiation.
+- [x] **Module 3: Invoice Recovery & Debt Negotiation**: Overdue invoice tracking, custom invoice creation in UI & Atlas, email reminders, 3 policy simulation scenarios, Razorpay links, and MongoDB Audit Trail.
+

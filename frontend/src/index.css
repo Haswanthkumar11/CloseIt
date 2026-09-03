@@ -154,26 +154,101 @@ body {
   box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
 }
 
-/* Exit Intent Debug Indicator */
-.intent-bar {
-  background: rgba(30, 41, 59, 0.8);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  padding: 0.75rem 1rem;
+/* Floating AI Rescue Launcher Icon & Alert Badge */
+.chat-launcher-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 1000;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 1.5rem;
-  font-size: 0.875rem;
+  gap: 12px;
+  cursor: pointer;
+  user-select: none;
 }
 
-.score-badge {
-  background: rgba(99, 102, 241, 0.2);
-  color: #818cf8;
-  padding: 0.25rem 0.75rem;
-  border-radius: 9999px;
+.chat-launcher-badge {
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid rgba(99, 102, 241, 0.5);
+  color: #ffffff;
+  padding: 8px 16px;
+  border-radius: 24px;
+  font-size: 0.88rem;
   font-weight: 700;
-  border: 1px solid rgba(99, 102, 241, 0.3);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 15px rgba(99, 102, 241, 0.3);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  backdrop-filter: blur(12px);
+  animation: badgePulse 2s infinite ease-in-out;
+  white-space: nowrap;
+}
+
+.chat-launcher-btn {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #ec4899 100%);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 25px rgba(99, 102, 241, 0.5);
+  position: relative;
+  cursor: pointer;
+  transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  animation: glowingIcon 2s infinite ease-in-out;
+}
+
+.chat-launcher-btn:hover {
+  transform: scale(1.1);
+}
+
+.chat-launcher-dot {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 14px;
+  height: 14px;
+  background-color: #10b981;
+  border: 2px solid #0a0e17;
+  border-radius: 50%;
+  animation: blinkDot 1.5s infinite;
+}
+
+@keyframes glowingIcon {
+  0% {
+    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7), 0 8px 25px rgba(0, 0, 0, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 25px 8px rgba(236, 72, 153, 0.6), 0 8px 25px rgba(0, 0, 0, 0.4);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7), 0 8px 25px rgba(0, 0, 0, 0.4);
+  }
+}
+
+@keyframes badgePulse {
+  0%, 100% {
+    transform: translateY(0);
+    border-color: rgba(99, 102, 241, 0.5);
+  }
+  50% {
+    transform: translateY(-3px);
+    border-color: rgba(236, 72, 153, 0.8);
+  }
+}
+
+@keyframes blinkDot {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.85);
+  }
 }
 
 /* Custom Scrollbar */

@@ -23,3 +23,13 @@ async def health_check():
         database=db_health,
         timestamp=datetime.now(timezone.utc).isoformat()
     )
+
+@router.get(
+    "/policy",
+    summary="Get Active Merchant Policy",
+    description="Returns the active single global merchant policy loaded from MongoDB Atlas (or in-memory default)."
+)
+async def get_policy_endpoint():
+    from backend.services.policy_engine import get_merchant_policy
+    policy = await get_merchant_policy()
+    return policy

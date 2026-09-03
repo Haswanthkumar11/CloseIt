@@ -12,9 +12,8 @@ export function Storefront({
   selectedProduct,
   onSelectProduct,
   onProceedToCheckout,
-  hesitationScore,
-  onManualTriggerChat,
-  onNavigateToOutcomes
+  onNavigateToOutcomes,
+  onNavigateToPayments
 }) {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -24,21 +23,90 @@ export function Storefront({
   // FIX 1: Ref for scrolling revealed checkout panel into view
   const activeDetailRef = useRef(null);
 
-  // Fetch product catalog from MongoDB backend API
+  const DEFAULT_FALLBACK_PRODUCTS = [
+    {
+      id: 'p1',
+      name: 'Apex Pro Wireless Noise-Cancelling Headphones',
+      category: 'Electronics',
+      price: 4999.0,
+      description: 'Studio-grade active noise cancellation with 40-hour battery life and ultra-soft memory foam earcups.',
+      rating: 4.9,
+      reviews: 1420,
+      icon: '🎧'
+    },
+    {
+      id: 'p2',
+      name: 'Aura 4K Cinema Soundbar Pro',
+      category: 'Electronics',
+      price: 8999.0,
+      description: 'Dolby Atmos 3D surround sound audio with wireless 10-inch subwoofer and Bluetooth 5.3.',
+      rating: 4.8,
+      reviews: 890,
+      icon: '🔊'
+    },
+    {
+      id: 'p3',
+      name: 'Velocity Sport Smartwatch Ultra',
+      category: 'Fashion',
+      price: 6499.0,
+      description: 'Aerospace-grade titanium casing with 1.96-inch AMOLED display, GPS & SpO2 health tracking.',
+      rating: 4.9,
+      reviews: 2150,
+      icon: '⌚'
+    },
+    {
+      id: 'p4',
+      name: 'Urban Stealth Waterproof Tech Backpack',
+      category: 'Fashion',
+      price: 2999.0,
+      description: 'Anti-theft compartmentalized design with TSA lock, powerbank USB port & rainproof fabric.',
+      rating: 4.7,
+      reviews: 640,
+      icon: '🎒'
+    },
+    {
+      id: 'p5',
+      name: 'Organic Cold-Pressed EVOO & Herb Gift Set',
+      category: 'Groceries',
+      price: 1499.0,
+      description: 'Artisanal Italian extra virgin olive oil with organic rosemary & Tuscan garlic infusion.',
+      rating: 4.9,
+      reviews: 430,
+      icon: '🫒'
+    },
+    {
+      id: 'p6',
+      name: 'Single-Origin Himalayan Arabica Coffee Beans (1kg)',
+      category: 'Groceries',
+      price: 999.0,
+      description: 'Hand-picked 100% Arabica dark roast whole coffee beans roasted in micro-batches.',
+      rating: 4.8,
+      reviews: 1120,
+      icon: '☕'
+    }
+  ];
+
+  // Fetch product catalog from backend API with fallback safety
   useEffect(() => {
     const fetchCatalog = async () => {
       setLoading(true);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1500);
+
       try {
-        const res = await fetch(`${API_BASE}/products`);
+        const res = await fetch(`${API_BASE}/products`, { signal: controller.signal });
+        clearTimeout(timeoutId);
+
         if (res.ok) {
           const data = await res.json();
-          setProducts(data.products || []);
-          if (data.products && data.products.length > 0 && !selectedProduct) {
-            onSelectProduct(data.products[0]);
-          }
+          const loadedProducts = (data.products && data.products.length > 0) ? data.products : DEFAULT_FALLBACK_PRODUCTS;
+          setProducts(loadedProducts);
+        } else {
+          setProducts(DEFAULT_FALLBACK_PRODUCTS);
         }
       } catch (err) {
-        console.error('Error fetching products from API:', err);
+        console.warn('Using default fallback products due to API timeout or error:', err);
+        setProducts(DEFAULT_FALLBACK_PRODUCTS);
       } finally {
         setLoading(false);
       }
@@ -67,49 +135,6 @@ export function Storefront({
 
   return (
     <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
-      {/* Interactive Exit Intent Status & Navigation Bar */}
-      <div className="intent-bar">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <Zap size={18} color="#818cf8" />
-          <span style={{ fontWeight: 600 }}>Exit-Intent Hesitation Monitor:</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <span>Current Hesitation Score: <strong className="score-badge">{hesitationScore} / 3</strong></span>
-          <button
-            onClick={onManualTriggerChat}
-            style={{
-              background: 'rgba(255,255,255,0.1)',
-              border: '1px solid rgba(255,255,255,0.2)',
-              color: '#fff',
-              padding: '0.35rem 0.75rem',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '0.8rem'
-            }}
-          >
-            ⚡ Test Trigger Chat
-          </button>
-          <button
-            onClick={onNavigateToOutcomes}
-            style={{
-              background: 'rgba(99, 102, 241, 0.2)',
-              border: '1px solid rgba(99, 102, 241, 0.4)',
-              color: '#818cf8',
-              padding: '0.35rem 0.75rem',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '0.8rem',
-              fontWeight: 600,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.3rem'
-            }}
-          >
-            <BarChart2 size={14} />
-            View Outcomes Log (/outcomes)
-          </button>
-        </div>
-      </div>
 
       {/* Category Tabs */}
       <div style={{
@@ -347,16 +372,59 @@ export function Storefront({
               </div>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
               <button
                 className="btn-primary"
                 style={{ width: '100%', padding: '1rem', fontSize: '1.05rem' }}
                 onClick={() => onProceedToCheckout(activeProduct, quantity, totalPrice)}
               >
                 <CreditCard size={18} />
-                Proceed to Checkout with {activeProduct.name.split(' ')[0]}
+                Full Payment Checkout (₹{totalPrice.toLocaleString('en-IN')})
                 <ArrowRight size={18} />
               </button>
+
+              <button
+                style={{
+                  width: '100%',
+                  padding: '0.85rem',
+                  fontSize: '0.95rem',
+                  borderRadius: '12px',
+                  border: '1px solid rgba(245, 158, 11, 0.4)',
+                  background: 'rgba(245, 158, 11, 0.15)',
+                  color: '#fbbf24',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem'
+                }}
+                onClick={async () => {
+                  const initialDown = Math.round(totalPrice * 0.2);
+                  try {
+                    await fetch(`${API_BASE}/payments/my/create-plan`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        product_id: activeProduct.id,
+                        product_name: activeProduct.name,
+                        total_amount: totalPrice,
+                        downpayment: initialDown,
+                        num_installments: 3
+                      })
+                    });
+                  } catch (e) {
+                    console.error('Error saving credit purchase:', e);
+                  }
+
+                  if (onNavigateToPayments) {
+                    onNavigateToPayments();
+                  }
+                }}
+              >
+                💳 Buy with 3-Month Payment Plan (Pay ₹{Math.round(totalPrice * 0.2).toLocaleString('en-IN')} Down)
+              </button>
+
               <div style={{ textAlign: 'center', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
                 🔒 256-Bit SSL Encrypted Razorpay Checkout
               </div>

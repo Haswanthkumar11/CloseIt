@@ -1,22 +1,23 @@
-/**
- * App.jsx
- * Main Application Layout & State Orchestrator for CloseIt.
- * Handles category/product selection, routing (/outcomes), exit-intent, and ChatWidget cart context.
- */
-
 import React, { useState, useEffect } from 'react';
 import { Storefront } from './components/Storefront';
 import { ChatWidget } from './components/ChatWidget';
 import { OutcomesLog } from './components/OutcomesLog';
-import { useExitIntent } from './hooks/useExitIntent';
-import { Zap, BarChart2, ShoppingBag } from 'lucide-react';
+import { SubscriptionDemo } from './components/SubscriptionDemo';
+import { MyPayments } from './components/MyPayments';
+import { Zap, BarChart2, ShoppingBag, Smartphone, CreditCard } from 'lucide-react';
 import { API_BASE } from './config';
 
 export function App() {
-  // Sync tab with URL hash/pathname for direct navigation (e.g. /outcomes or #outcomes)
+  // Sync tab with URL hash/pathname for direct navigation (e.g. /outcomes, #recharge, #payments)
   const getInitialTab = () => {
     if (window.location.pathname === '/outcomes' || window.location.hash === '#outcomes') {
       return 'outcomes';
+    }
+    if (window.location.pathname === '/recharge' || window.location.hash === '#recharge') {
+      return 'recharge';
+    }
+    if (window.location.pathname === '/payments' || window.location.hash === '#payments' || window.location.hash === '#invoice') {
+      return 'payments';
     }
     return 'storefront';
   };
@@ -24,14 +25,37 @@ export function App() {
   const [activeTab, setActiveTab] = useState(getInitialTab);
   const [sessionId, setSessionId] = useState(null);
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const [selectedRechargePlan, setSelectedRechargePlan] = useState(null);
+  const [selectedInvoice, setSelectedInvoice] = useState(null);
+  const [initialInvoiceMessage, setInitialInvoiceMessage] = useState(null);
+  const [chatContextType, setChatContextType] = useState('checkout');
+
+  // Listen for activeTab changes to sync chatContextType
+  useEffect(() => {
+    if (activeTab === 'recharge') {
+      setChatContextType('subscription');
+    } else if (activeTab === 'payments' || activeTab === 'invoice') {
+      setChatContextType('invoice');
+    } else if (activeTab === 'storefront') {
+      setChatContextType('checkout');
+    }
+  }, [activeTab]);
 
   // Listen for hash / popstate changes for routing
   useEffect(() => {
     const handleLocationChange = () => {
       if (window.location.pathname === '/outcomes' || window.location.hash === '#outcomes') {
         setActiveTab('outcomes');
+        setChatContextType('checkout');
+      } else if (window.location.pathname === '/recharge' || window.location.hash === '#recharge') {
+        setActiveTab('recharge');
+        setChatContextType('subscription');
+      } else if (window.location.pathname === '/payments' || window.location.hash === '#payments' || window.location.hash === '#invoice') {
+        setActiveTab('payments');
+        setChatContextType('invoice');
       } else {
         setActiveTab('storefront');
+        setChatContextType('checkout');
       }
     };
 
@@ -45,7 +69,18 @@ export function App() {
 
   const switchTab = (tab) => {
     setActiveTab(tab);
-    window.location.hash = tab === 'outcomes' ? 'outcomes' : 'storefront';
+    window.location.hash = tab;
+    setInitialInvoiceMessage(null);
+    if (tab === 'recharge') {
+      setChatContextType('subscription');
+      setSelectedRechargePlan(null);
+    } else if (tab === 'payments' || tab === 'invoice') {
+      setChatContextType('payments');
+      setSelectedInvoice(null);
+    } else if (tab === 'storefront') {
+      setChatContextType('checkout');
+      setSelectedProduct(null);
+    }
   };
 
   // Start fresh checkout session for the selected product
@@ -82,19 +117,24 @@ export function App() {
     setSelectedProduct(product);
   };
 
-  // Initialize Exit Intent hook
-  const { hesitationScore, isChatTriggered, resetChatTrigger, manuallyTriggerChat } = useExitIntent(activeTab === 'storefront');
   const [isChatOpen, setIsChatOpen] = useState(false);
-
-  // Sync auto-triggered exit-intent with chat open state
-  useEffect(() => {
-    if (isChatTriggered) {
-      setIsChatOpen(true);
-    }
-  }, [isChatTriggered]);
 
   const handleProceedToCheckout = (product, qty, total) => {
     if (product) setSelectedProduct(product);
+    setChatContextType('checkout');
+    setIsChatOpen(true);
+  };
+
+  const handlePlanSelectedForRescue = (plan) => {
+    setSelectedRechargePlan(plan);
+    setChatContextType('subscription');
+    setIsChatOpen(true);
+  };
+
+  const handleInvoiceSelectedForRescue = (invoice, initialMsg = null) => {
+    setSelectedInvoice(invoice);
+    setInitialInvoiceMessage(initialMsg);
+    setChatContextType('invoice');
     setIsChatOpen(true);
   };
 
@@ -104,7 +144,7 @@ export function App() {
       <header className="app-header">
         <div className="brand-title" style={{ cursor: 'pointer' }} onClick={() => switchTab('storefront')}>
           <Zap size={24} color="#6366f1" />
-          <span>CloseIt AI <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 500 }}>Checkout Rescue</span></span>
+          <span>CloseIt AI <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 500 }}>Multi-Context Payment Assistant</span></span>
         </div>
 
         <div className="nav-tabs">
@@ -113,30 +153,58 @@ export function App() {
             onClick={() => switchTab('storefront')}
           >
             <ShoppingBag size={16} style={{ marginRight: '0.4rem', verticalAlign: 'middle' }} />
-            Demo Storefront
+            🛍️ Shop <span style={{ fontSize: '0.7rem', opacity: 0.7, marginLeft: '0.2rem' }}>(Checkout Assistant)</span>
+          </button>
+          <button
+            className={`nav-button ${activeTab === 'recharge' ? 'active' : ''}`}
+            onClick={() => switchTab('recharge')}
+          >
+            <Smartphone size={16} style={{ marginRight: '0.4rem', verticalAlign: 'middle' }} />
+            📱 Recharge <span style={{ fontSize: '0.7rem', opacity: 0.7, marginLeft: '0.2rem' }}>(Plan Assistant)</span>
+          </button>
+          <button
+            className={`nav-button ${activeTab === 'payments' ? 'active' : ''}`}
+            onClick={() => switchTab('payments')}
+          >
+            <CreditCard size={16} style={{ marginRight: '0.4rem', verticalAlign: 'middle' }} />
+            💳 My Payments <span style={{ fontSize: '0.7rem', opacity: 0.7, marginLeft: '0.2rem' }}>(Payment Assistant)</span>
           </button>
           <button
             className={`nav-button ${activeTab === 'outcomes' ? 'active' : ''}`}
             onClick={() => switchTab('outcomes')}
           >
             <BarChart2 size={16} style={{ marginRight: '0.4rem', verticalAlign: 'middle' }} />
-            Outcomes Log (/outcomes)
+            Outcomes Log
           </button>
         </div>
       </header>
 
       {/* Main Content Area */}
       <main className="main-container" style={{ flex: 1 }}>
-        {activeTab === 'storefront' ? (
+        {activeTab === 'storefront' && (
           <Storefront
             selectedProduct={selectedProduct}
             onSelectProduct={handleSelectProduct}
             onProceedToCheckout={handleProceedToCheckout}
-            hesitationScore={hesitationScore}
-            onManualTriggerChat={() => setIsChatOpen(true)}
             onNavigateToOutcomes={() => switchTab('outcomes')}
+            onNavigateToPayments={() => switchTab('payments')}
           />
-        ) : (
+        )}
+        {activeTab === 'recharge' && (
+          <SubscriptionDemo
+            onPlanSelectedForRescue={handlePlanSelectedForRescue}
+            onPlanSelect={(plan) => {
+              setSelectedRechargePlan(plan);
+              setChatContextType('subscription');
+            }}
+          />
+        )}
+        {activeTab === 'payments' && (
+          <MyPayments
+            onInvoiceSelectedForRescue={handleInvoiceSelectedForRescue}
+          />
+        )}
+        {activeTab === 'outcomes' && (
           <OutcomesLog />
         )}
       </main>
@@ -144,13 +212,15 @@ export function App() {
       {/* Rescue Floating Chat Widget */}
       <ChatWidget
         isOpen={isChatOpen}
-        onClose={() => {
-          setIsChatOpen(false);
-          resetChatTrigger();
-        }}
+        onOpen={() => setIsChatOpen(true)}
+        onClose={() => setIsChatOpen(false)}
         sessionId={sessionId}
         cartItem={selectedProduct ? selectedProduct.name : ''}
         cartPrice={selectedProduct ? selectedProduct.price : 0}
+        contextType={chatContextType}
+        selectedPlan={selectedRechargePlan}
+        selectedInvoice={selectedInvoice}
+        initialUserMessage={initialInvoiceMessage}
         onOutcomeLogged={() => {
           // Callback if needed
         }}

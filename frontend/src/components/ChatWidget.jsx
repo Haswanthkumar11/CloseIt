@@ -10,10 +10,15 @@ import { API_BASE } from '../config';
 
 export function ChatWidget({
   isOpen,
+  onOpen,
   onClose,
   sessionId,
   cartItem,
   cartPrice,
+  contextType = 'checkout',
+  selectedPlan = null,
+  selectedInvoice = null,
+  initialUserMessage = null,
   onOutcomeLogged
 }) {
   const [messages, setMessages] = useState([]);
@@ -22,24 +27,161 @@ export function ChatWidget({
   const [currentDiscount, setCurrentDiscount] = useState(0);
   const [lastObjectionType, setLastObjectionType] = useState('price');
   const [lastResolution, setLastResolution] = useState('Offered discount');
-  
+  const [recommendations, setRecommendations] = useState([]);
+  const [activePlan, setActivePlan] = useState(selectedPlan);
+
   const messagesEndRef = useRef(null);
 
-  // FIX 2: Reset chat history & opening message whenever active product changes or session starts
+  const defaultPlanFallback = {
+    id: 'plan_299',
+    name: 'Standard Daily Data Pack',
+    price: 299,
+    validity_days: 28,
+    data_per_day: '1.5GB'
+  };
+
+  const defaultInvoiceFallback = {
+    id: 'inv_001',
+    client_name: 'Acme Technologies',
+    amount: 12500,
+    description: 'Website Development - August'
+  };
+
+  const effectivePlan = contextType === 'subscription' ? selectedPlan : null;
+  const effectiveInvoice = (contextType === 'invoice' || contextType === 'payments') ? selectedInvoice : null;
+
+  const currentSelectedItem = contextType === 'subscription'
+    ? selectedPlan
+    : (contextType === 'invoice' || contextType === 'payments')
+    ? selectedInvoice
+    : (cartItem ? { name: cartItem, price: cartPrice } : null);
+
+  // Requirement: Wait for customer to browse. 
+  // After 2.5s hesitation / inactivity AFTER an item is selected by customer, auto-open the AI Agent.
   useEffect(() => {
-    if (cartItem) {
-      setMessages([
-        {
-          role: 'assistant',
-          content: `Hey! Before you go — is something holding you back from ordering the ${cartItem}? I'm here to help!`,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        }
-      ]);
-      setCurrentDiscount(0);
-    } else {
-      setMessages([]);
+    if (!isOpen && currentSelectedItem) {
+      const timer = setTimeout(() => {
+        if (onOpen) onOpen();
+      }, 2500);
+
+      return () => clearTimeout(timer);
     }
-  }, [cartItem, cartPrice, sessionId]);
+  }, [isOpen, currentSelectedItem, onOpen]);
+
+  // Clean context-isolated initial state generator
+  useEffect(() => {
+    let isCancelled = false;
+
+    if (contextType === 'subscription') {
+      if (selectedPlan) {
+        setActivePlan(selectedPlan);
+        setCurrentDiscount(0);
+
+        const fetchRecs = async () => {
+          try {
+            const res = await fetch(`${API_BASE}/subscription/recommendations/${selectedPlan.id}`);
+            if (isCancelled) return;
+            if (res.ok) {
+              const data = await res.json();
+              const recs = data.recommendations || [];
+              setRecommendations(recs);
+              setMessages([
+                {
+                  role: 'assistant',
+                  content: `Hey! I noticed you selected the ₹${selectedPlan.price} plan (${selectedPlan.name}).\nI'm your AI Recharge Assistant! Before you proceed, here are top recommendations and exclusive discount options:`,
+                  recommendations: recs,
+                  timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                }
+              ]);
+            } else {
+              setMessages([
+                {
+                  role: 'assistant',
+                  content: `Hey! I noticed you selected the ₹${selectedPlan.price} plan (${selectedPlan.name}). Ask me for exclusive discounts, OTT bundles, or validity upgrades!`,
+                  timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                }
+              ]);
+            }
+          } catch (err) {
+            if (isCancelled) return;
+            console.error('Error fetching subscription recommendations:', err);
+            setMessages([
+              {
+                role: 'assistant',
+                content: `Hey! I noticed you selected the ₹${selectedPlan.price} plan (${selectedPlan.name}). Ask me for exclusive discounts, OTT bundles, or validity upgrades!`,
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              }
+            ]);
+          }
+        };
+
+        fetchRecs();
+      } else {
+        setMessages([
+          {
+            role: 'assistant',
+            content: `Welcome to Smart Recharge! Browse the available plans above and select any recharge pack to get instant recommendations or exclusive discount options!`,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }
+        ]);
+      }
+
+    } else if (contextType === 'invoice' || contextType === 'payments') {
+      if (selectedInvoice) {
+        setCurrentDiscount(0);
+        const planTitle = selectedInvoice.product_name || selectedInvoice.description || 'Credit Purchase Plan';
+        const planAmount = selectedInvoice.installment_amount || selectedInvoice.amount || 1166.33;
+        const greetingMsg = {
+          role: 'assistant',
+          content: `Hello! I am CloseIt, your personal payment advisor for ${planTitle}.\nRegarding your upcoming installment of ₹${(planAmount || 0).toLocaleString('en-IN')}, I can help adjust payment dates, structure partial downpayments, or answer any questions about your plan!`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+
+        if (initialUserMessage) {
+          setMessages([greetingMsg]);
+          const timer = setTimeout(() => {
+            if (!isCancelled) handleSendMessage(null, initialUserMessage);
+          }, 300);
+          return () => clearTimeout(timer);
+        } else {
+          setMessages([greetingMsg]);
+        }
+      } else {
+        setMessages([
+          {
+            role: 'assistant',
+            content: `Welcome to Customer Payments! Select any of your active purchases or upcoming installments below to adjust payment schedules or request extensions.`,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }
+        ]);
+      }
+
+    } else {
+      // Context: 'checkout' (Shop page)
+      if (cartItem) {
+        setCurrentDiscount(0);
+        setMessages([
+          {
+            role: 'assistant',
+            content: `Hey! I noticed you selected the ${cartItem} (₹${(cartPrice || 0).toLocaleString('en-IN')}). I'm your AI Checkout Assistant! Is there anything holding you back from ordering? Ask me for exclusive discounts or 3-month payment plan options!`,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }
+        ]);
+      } else {
+        setMessages([
+          {
+            role: 'assistant',
+            content: `Welcome to CloseIt Store! Browse our products above and select any item to view details, request instant discounts, or check EMI/UPI payment options!`,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }
+        ]);
+      }
+    }
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [contextType, selectedPlan?.id, selectedInvoice?.id, cartItem, cartPrice, initialUserMessage]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -49,15 +191,41 @@ export function ChatWidget({
     scrollToBottom();
   }, [messages, isTyping]);
 
-  if (!isOpen) return null;
+  if (!isOpen) {
+    return (
+      <div className="chat-launcher-container" onClick={onOpen}>
+        <div className="chat-launcher-badge">
+          <Sparkles size={16} color="#818cf8" />
+          <span>Need any help?</span>
+        </div>
+        <div className="chat-launcher-btn">
+          <Bot size={28} color="#fff" />
+          <span className="chat-launcher-dot"></span>
+        </div>
+      </div>
+    );
+  }
 
-  const effectivePrice = cartPrice ? cartPrice * (1 - currentDiscount / 100) : 0;
+  const currentPrice = contextType === 'subscription'
+    ? (selectedPlan ? selectedPlan.price : 0)
+    : contextType === 'invoice'
+    ? (selectedInvoice ? selectedInvoice.amount : 0)
+    : (cartPrice || 0);
 
-  const handleSendMessage = async (e) => {
+  const currentTitle = contextType === 'subscription'
+    ? (selectedPlan ? selectedPlan.name : 'No Plan Selected')
+    : contextType === 'invoice'
+    ? (selectedInvoice ? `${selectedInvoice.description} (${selectedInvoice.client_name})` : 'No Invoice Selected')
+    : (cartItem || 'No Product Selected');
+
+  const effectivePrice = currentPrice ? currentPrice * (1 - currentDiscount / 100) : 0;
+  const isContextActive = Boolean(currentSelectedItem);
+
+  const handleSendMessage = async (e, textOverride = null) => {
     if (e) e.preventDefault();
-    if (!inputMessage.trim() || isTyping || !cartItem) return;
+    const userText = (textOverride || inputMessage).trim();
+    if (!userText || isTyping) return;
 
-    const userText = inputMessage.trim();
     const userMsgObj = {
       role: 'user',
       content: userText,
@@ -65,17 +233,64 @@ export function ChatWidget({
     };
 
     setMessages((prev) => [...prev, userMsgObj]);
-    setInputMessage('');
+    if (!textOverride) setInputMessage('');
     setIsTyping(true);
 
+    // If no specific item is selected yet, provide friendly context-aware guidance
+    if (!currentSelectedItem) {
+      let replyContent = "I'm ready to help you save! Please select a product, recharge plan, or invoice above first so I can apply exclusive discounts or generate payment options for you.";
+      const lower = userText.toLowerCase();
+      if (lower.includes('discount')) {
+        replyContent = "I offer instant discounts on all products and recharge plans! Please click and select an item above so I can check the exact discount available for you.";
+      } else if (lower.includes('emi') || lower.includes('upi')) {
+        replyContent = "We support 256-bit SSL secured payments via UPI, Credit Cards, and 3-Month EMI plans. Select any product above to view its monthly breakdown!";
+      } else if (lower.includes('payment link') || lower.includes('pay')) {
+        replyContent = "Please select a product, plan, or invoice above first so I can generate your personalized payment link!";
+      }
+
+      setTimeout(() => {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: 'assistant',
+            content: replyContent,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }
+        ]);
+        setIsTyping(false);
+      }, 400);
+      return;
+    }
+
     try {
-      const response = await fetch(`${API_BASE}/chat`, {
+      let endpoint = `${API_BASE}/chat`;
+      let bodyPayload = {
+        session_id: sessionId || 'default_demo_session',
+        message: userText
+      };
+
+      if (contextType === 'subscription' && effectivePlan) {
+        endpoint = `${API_BASE}/subscription/negotiate`;
+        bodyPayload = {
+          session_id: sessionId || 'default_sub_session',
+          selected_plan_id: effectivePlan.id,
+          user_message: userText,
+          current_discount: currentDiscount
+        };
+      } else if (contextType === 'invoice' && effectiveInvoice) {
+        endpoint = `${API_BASE}/invoice/negotiate`;
+        bodyPayload = {
+          session_id: sessionId || 'default_inv_session',
+          invoice_id: effectiveInvoice.id,
+          user_message: userText,
+          current_discount: currentDiscount
+        };
+      }
+
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          session_id: sessionId || 'default_demo_session',
-          message: userText
-        })
+        body: JSON.stringify(bodyPayload)
       });
 
       if (!response.ok) {
@@ -84,25 +299,23 @@ export function ChatWidget({
 
       const data = await response.json();
 
+      if (data.switched_plan) {
+        setActivePlan(data.switched_plan);
+      }
+
       const assistantMsgObj = {
         role: 'assistant',
-        content: data.reply,
+        content: data.reply || data.reply_text,
         payment_link: data.payment_link,
-        discount_percent: data.discount_percent,
+        discount_percent: data.discount_percent || data.applied_discount_percent,
         payment_method: data.payment_method,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
 
       setMessages((prev) => [...prev, assistantMsgObj]);
 
-      if (data.discount_percent) {
-        setCurrentDiscount(data.discount_percent);
-      }
-      if (data.objection_type) {
-        setLastObjectionType(data.objection_type);
-      }
-      if (data.resolution_offered) {
-        setLastResolution(data.resolution_offered);
+      if (data.discount_percent || data.applied_discount_percent) {
+        setCurrentDiscount(data.discount_percent || data.applied_discount_percent);
       }
 
     } catch (err) {
@@ -111,7 +324,11 @@ export function ChatWidget({
         ...prev,
         {
           role: 'assistant',
-          content: `I understand your hesitation! How about a 10% instant discount on the ${cartItem} to close the deal today?`,
+          content: contextType === 'invoice'
+            ? `I can offer a compliant payment arrangement for invoice ${effectiveInvoice?.id?.toUpperCase() || 'INV-001'} (₹${Math.round(currentPrice).toLocaleString('en-IN')}): Pay 30% upfront (₹${Math.round(currentPrice * 0.32).toLocaleString('en-IN')}) today and the balance next month.`
+            : contextType === 'subscription'
+            ? `I can offer an exclusive 10% instant discount on your ${currentTitle} plan!`
+            : `I understand your hesitation! How about a 10% instant discount on the ${currentTitle} to close the deal today?`,
           discount_percent: 10,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         }
@@ -131,8 +348,8 @@ export function ChatWidget({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           session_id: sessionId || 'demo_session',
-          objection_type: lastObjectionType || 'price',
-          resolution: lastResolution || '10% discount',
+          objection_type: lastObjectionType || (contextType === 'invoice' ? 'invoice_recovery' : contextType === 'subscription' ? 'recharge_hesitation' : 'price'),
+          resolution: lastResolution || 'Arrangement agreed',
           converted: true,
           recovered_amount: effectivePrice
         })
@@ -147,8 +364,8 @@ export function ChatWidget({
     position: 'fixed',
     bottom: '24px',
     right: '24px',
-    width: '400px',
-    maxHeight: '620px',
+    width: '420px',
+    maxHeight: '640px',
     height: '85vh',
     zIndex: 1000,
     display: 'flex',
@@ -161,7 +378,11 @@ export function ChatWidget({
   };
 
   const headerStyle = {
-    background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+    background: contextType === 'invoice'
+      ? 'linear-gradient(135deg, #d97706 0%, #f59e0b 100%)'
+      : contextType === 'subscription'
+      ? 'linear-gradient(135deg, #059669 0%, #10b981 100%)'
+      : 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
     padding: '1rem 1.25rem',
     display: 'flex',
     justifyContent: 'space-between',
@@ -183,10 +404,12 @@ export function ChatWidget({
             <Sparkles size={20} />
           </div>
           <div>
-            <div style={{ fontWeight: 700, fontSize: '1rem', lineHeight: '1.2' }}>CloseIt Rescue Agent</div>
+            <div style={{ fontWeight: 700, fontSize: '1rem', lineHeight: '1.2' }}>
+              {contextType === 'invoice' ? 'CloseIt Payment Advisor' : contextType === 'subscription' ? 'Smart Recharge Assistant' : 'CloseIt Rescue Agent'}
+            </div>
             <div style={{ fontSize: '0.75rem', opacity: 0.9, display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#34d399', display: 'inline-block' }}></span>
-              Online — Ready to negotiate
+              {contextType === 'invoice' ? 'Online — Payment & Credit Advisor' : contextType === 'subscription' ? 'Online — Recharge Advisor' : 'Online — Ready to negotiate'}
             </div>
           </div>
         </div>
@@ -210,7 +433,7 @@ export function ChatWidget({
         </button>
       </div>
 
-      {/* Cart Summary Banner */}
+      {/* Summary Banner */}
       <div style={{
         background: 'rgba(30, 41, 59, 0.8)',
         padding: '0.75rem 1.25rem',
@@ -220,28 +443,29 @@ export function ChatWidget({
         alignItems: 'center',
         fontSize: '0.85rem'
       }}>
-        {cartItem ? (
+        {isContextActive ? (
           <>
-            <span style={{ color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '200px' }}>
-              🛒 {cartItem}
+            <span style={{ color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '230px' }}>
+              {contextType === 'invoice' ? '📄 ' : contextType === 'subscription' ? '⚡ ' : '🛒 '}
+              {currentTitle}
             </span>
             <div>
               {currentDiscount > 0 ? (
                 <span>
                   <span style={{ textDecoration: 'line-through', color: 'var(--text-muted)', marginRight: '0.4rem' }}>
-                    ₹{cartPrice.toLocaleString('en-IN')}
+                    ₹{currentPrice.toLocaleString('en-IN')}
                   </span>
                   <strong style={{ color: '#34d399', fontSize: '0.95rem' }}>
                     ₹{effectivePrice.toLocaleString('en-IN')}
                   </strong>
                 </span>
               ) : (
-                <strong style={{ color: '#fff' }}>₹{cartPrice.toLocaleString('en-IN')}</strong>
+                <strong style={{ color: '#fff' }}>₹{currentPrice.toLocaleString('en-IN')}</strong>
               )}
             </div>
           </>
         ) : (
-          <span style={{ color: 'var(--text-muted)' }}>No Product Selected</span>
+          <span style={{ color: 'var(--text-muted)' }}>No Selection</span>
         )}
       </div>
 
@@ -254,8 +478,7 @@ export function ChatWidget({
         flexDirection: 'column',
         gap: '1rem'
       }}>
-        {!cartItem ? (
-          // Placeholder state when no product is selected
+        {!isContextActive ? (
           <div style={{
             flex: 1,
             display: 'flex',
@@ -268,9 +491,15 @@ export function ChatWidget({
             padding: '2rem'
           }}>
             <ShoppingBag size={48} color="#6366f1" opacity={0.6} />
-            <h4 style={{ color: '#fff', fontSize: '1.05rem', fontWeight: 600 }}>Select a Product to Get Started</h4>
+            <h4 style={{ color: '#fff', fontSize: '1.05rem', fontWeight: 600 }}>
+              {contextType === 'invoice' ? 'Select an Invoice' : contextType === 'subscription' ? 'Select a Recharge Plan' : 'Select a Product'}
+            </h4>
             <p style={{ fontSize: '0.85rem', lineHeight: '1.4' }}>
-              Click on any product card in the storefront to select an item and begin your AI checkout rescue consultation.
+              {contextType === 'invoice'
+                ? 'Select an overdue invoice to initiate B2B debt negotiation.'
+                : contextType === 'subscription'
+                ? 'Select any mobile recharge plan to negotiate better options or request a discount.'
+                : 'Click on any product card in the storefront to select an item and begin your consultation.'}
             </p>
           </div>
         ) : (
@@ -296,7 +525,7 @@ export function ChatWidget({
                       width: 28,
                       height: 28,
                       borderRadius: '50%',
-                      background: 'var(--primary-accent)',
+                      background: contextType === 'invoice' ? '#d97706' : contextType === 'subscription' ? '#059669' : 'var(--primary-accent)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -307,7 +536,7 @@ export function ChatWidget({
                   )}
 
                   <div style={{
-                    background: isAssistant ? 'rgba(30, 41, 59, 0.9)' : 'var(--primary-accent)',
+                    background: isAssistant ? 'rgba(30, 41, 59, 0.9)' : (contextType === 'invoice' ? '#d97706' : contextType === 'subscription' ? '#059669' : 'var(--primary-accent)'),
                     color: '#fff',
                     padding: '0.75rem 1rem',
                     borderRadius: isAssistant ? '16px 16px 16px 4px' : '16px 16px 4px 16px',
@@ -337,36 +566,28 @@ export function ChatWidget({
                       </div>
                     )}
 
-                    {msg.payment_method && (
-                      <div style={{
-                        marginTop: '0.75rem',
-                        background: 'rgba(168, 85, 247, 0.15)',
-                        border: '1px solid rgba(168, 85, 247, 0.4)',
-                        padding: '0.5rem 0.75rem',
-                        borderRadius: '8px',
-                        color: '#c084fc',
-                        fontWeight: 600,
-                        fontSize: '0.82rem',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.4rem'
-                      }}>
-                        <CreditCard size={14} />
-                        {msg.payment_method.toUpperCase()} Payment Option Active
-                      </div>
-                    )}
-
                     {msg.payment_link && (
                       <div style={{ marginTop: '0.85rem' }}>
-                        <button
+                        <a
+                          href={msg.payment_link}
+                          target="_blank"
+                          rel="noopener noreferrer"
                           className="btn-success"
                           onClick={() => handlePayNowClick(msg.payment_link)}
-                          style={{ padding: '0.65rem 1rem', fontSize: '0.9rem' }}
+                          style={{
+                            padding: '0.65rem 1rem',
+                            fontSize: '0.9rem',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.5rem',
+                            textDecoration: 'none',
+                            color: '#fff'
+                          }}
                         >
                           <CheckCircle2 size={16} />
                           Pay Now (₹{effectivePrice.toLocaleString('en-IN')})
                           <ExternalLink size={14} />
-                        </button>
+                        </a>
                       </div>
                     )}
                   </div>
@@ -382,7 +603,7 @@ export function ChatWidget({
 
         {isTyping && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-            <Bot size={16} color="var(--primary-accent)" />
+            <Bot size={16} color={contextType === 'invoice' ? '#d97706' : contextType === 'subscription' ? '#10b981' : 'var(--primary-accent)'} />
             <span>CloseIt is typing...</span>
           </div>
         )}
@@ -390,36 +611,92 @@ export function ChatWidget({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Quick Objection Action Chips */}
-      {cartItem && (
-        <div style={{
-          padding: '0.5rem 1rem',
-          background: 'rgba(15, 23, 42, 0.8)',
-          borderTop: '1px solid var(--border-color)',
-          display: 'flex',
-          gap: '0.5rem',
-          overflowX: 'auto'
-        }}>
-          <button
-            onClick={() => { setInputMessage("Is there any discount available?"); }}
-            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-muted)', padding: '0.3rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
-          >
-            🏷️ Ask for Discount
-          </button>
-          <button
-            onClick={() => { setInputMessage("Can I pay in EMI or UPI?"); }}
-            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-muted)', padding: '0.3rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
-          >
-            💳 EMI / UPI Options
-          </button>
-          <button
-            onClick={() => { setInputMessage("Send me the payment link"); }}
-            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-muted)', padding: '0.3rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
-          >
-            ⚡ Get Payment Link
-          </button>
-        </div>
-      )}
+      {/* Quick Action Chips */}
+      <div style={{
+        padding: '0.5rem 1rem',
+        background: 'rgba(15, 23, 42, 0.8)',
+        borderTop: '1px solid var(--border-color)',
+        display: 'flex',
+        gap: '0.5rem',
+        overflowX: 'auto'
+      }}>
+        {contextType === 'invoice' ? (
+          <>
+            <button
+              onClick={() => { setInputMessage("I'm having cash-flow issues. Can I pay ₹4,000 now and the rest next month?"); }}
+              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-muted)', padding: '0.3rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
+            >
+              💳 Pay 30% Down (₹4,000)
+            </button>
+            <button
+              onClick={() => { setInputMessage("Can you give me another 15 days to pay the full amount?"); }}
+              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-muted)', padding: '0.3rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
+            >
+              📅 15-Day Extension
+            </button>
+            <button
+              onClick={() => { setInputMessage("Can I pay ₹1,000 now and the remaining amount after 90 days?"); }}
+              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-muted)', padding: '0.3rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
+            >
+              ⚠️ Excessive Request
+            </button>
+            <button
+              onClick={() => { setInputMessage("Send me payment link for this invoice"); }}
+              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-muted)', padding: '0.3rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
+            >
+              ⚡ Get Payment Link
+            </button>
+          </>
+        ) : contextType === 'subscription' ? (
+          <>
+            <button
+              onClick={() => { setInputMessage(`Is there any discount available on the ${currentTitle}?`); }}
+              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-muted)', padding: '0.3rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
+            >
+              🏷️ Ask for Discount
+            </button>
+            <button
+              onClick={() => { setInputMessage("Which plans include OTT subscriptions like Hotstar or SonyLIV?"); }}
+              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-muted)', padding: '0.3rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
+            >
+              🎬 OTT & 5G Options
+            </button>
+            <button
+              onClick={() => { setInputMessage("Show me longer validity options for my recharge."); }}
+              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-muted)', padding: '0.3rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
+            >
+              📅 More Validity
+            </button>
+            <button
+              onClick={() => { setInputMessage("Send me payment link for this recharge plan"); }}
+              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-muted)', padding: '0.3rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
+            >
+              ⚡ Get Payment Link
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              onClick={() => { setInputMessage("Is there any discount available?"); }}
+              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-muted)', padding: '0.3rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
+            >
+              🏷️ Ask for Discount
+            </button>
+            <button
+              onClick={() => { setInputMessage("Can I pay in EMI or UPI?"); }}
+              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-muted)', padding: '0.3rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
+            >
+              💳 EMI / UPI Options
+            </button>
+            <button
+              onClick={() => { setInputMessage("Send me the payment link"); }}
+              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-muted)', padding: '0.3rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
+            >
+              ⚡ Get Payment Link
+            </button>
+          </>
+        )}
+      </div>
 
       {/* Message Input Form */}
       <form onSubmit={handleSendMessage} style={{
@@ -433,8 +710,11 @@ export function ChatWidget({
           type="text"
           value={inputMessage}
           onChange={(e) => setInputMessage(e.target.value)}
-          placeholder={cartItem ? "Type your objection..." : "Select a product to chat..."}
-          disabled={!cartItem}
+          placeholder={
+            isContextActive
+              ? (contextType === 'invoice' ? "Propose an arrangement or request extension..." : contextType === 'subscription' ? "Ask about recharge plans, discounts, or OTT..." : "Type your objection or ask for discount...")
+              : "Type your question or select an item above..."
+          }
           style={{
             flex: 1,
             background: 'rgba(255, 255, 255, 0.06)',
@@ -443,15 +723,17 @@ export function ChatWidget({
             padding: '0.65rem 0.85rem',
             color: '#fff',
             fontSize: '0.88rem',
-            outline: 'none',
-            opacity: cartItem ? 1 : 0.5
+            outline: 'none'
           }}
         />
         <button
           type="submit"
           className="btn-primary"
-          disabled={!cartItem}
-          style={{ padding: '0.65rem 0.9rem', borderRadius: '10px', opacity: cartItem ? 1 : 0.5 }}
+          style={{
+            padding: '0.65rem 0.9rem',
+            borderRadius: '10px',
+            background: contextType === 'invoice' ? 'linear-gradient(135deg, #d97706 0%, #f59e0b 100%)' : contextType === 'subscription' ? 'linear-gradient(135deg, #059669 0%, #10b981 100%)' : undefined
+          }}
         >
           <Send size={16} />
         </button>
@@ -459,3 +741,4 @@ export function ChatWidget({
     </div>
   );
 }
+
