@@ -328,11 +328,46 @@ def fallback_keyword_classifier(
     if context_type == "subscription":
         # 1. OTT / Streaming / Validity / 5G Features Inquiry
         if any(k in msg for k in ["ott", "hotstar", "sonyliv", "prime", "netflix", "zee5", "streaming", "movie", "cinema", "tv", "options"]):
-            reply = "Great question! We have 4 top recharge packs with included OTT subscriptions:\n1. ₹349 Streaming Pack (28 Days) — JioHotstar, Prime Video & SonyLIV\n2. ₹839 Quarterly Pack (84 Days) — 1-Year JioHotstar Mobile\n3. ₹999 Heavy 5G Pack (84 Days) — JioHotstar & Zee5\n4. ₹2,999 Annual Pack (365 Days) — 1-Year JioHotstar Premium & Prime Video\nWhich plan would you like to select?"
+            reply = "Here are our top recharge packs with included OTT subscriptions! Click 'Select & Recharge' on any plan card below:"
+            plans = [
+                {
+                    "id": "plan_349",
+                    "name": "5G Plus & Streaming Pack",
+                    "price": 349.0,
+                    "validity_days": 28,
+                    "data_per_day": "3GB",
+                    "ott_benefits": ["JioHotstar Mobile", "Prime Video Mobile", "SonyLIV"]
+                },
+                {
+                    "id": "plan_839",
+                    "name": "Quarterly Pro 2GB + OTT",
+                    "price": 839.0,
+                    "validity_days": 84,
+                    "data_per_day": "2GB",
+                    "ott_benefits": ["JioHotstar Mobile (1 Year)"]
+                },
+                {
+                    "id": "plan_999",
+                    "name": "Heavy User Unlimited 5G Pack",
+                    "price": 999.0,
+                    "validity_days": 84,
+                    "data_per_day": "3GB",
+                    "ott_benefits": ["JioHotstar Mobile", "Zee5"]
+                },
+                {
+                    "id": "plan_2999",
+                    "name": "Annual Ultra Unlimited 365",
+                    "price": 2999.0,
+                    "validity_days": 365,
+                    "data_per_day": "2.5GB",
+                    "ott_benefits": ["JioHotstar Premium (1 Year)", "Prime Video"]
+                }
+            ]
             return reply, {
                 "tool_called": "recommend_subscription",
                 "objection_type": "subscription_ott_inquiry",
-                "resolution_offered": "OTT catalog recommendation provided"
+                "resolution_offered": "OTT catalog recommendation provided",
+                "plans": plans
             }
         # 2. Price / Discount Objection for Subscription
         elif any(k in msg for k in ["expensive", "price", "cost", "cheaper", "discount", "budget", "high", "money", "afford", "offer"]):
@@ -344,14 +379,6 @@ def fallback_keyword_classifier(
                 "objection_type": "subscription_price",
                 "resolution_offered": "10% recharge discount",
                 "discount_percent": discount
-            }
-        # 2. OTT / Validity / 5G Features Inquiry
-        elif any(k in msg for k in ["ott", "validity", "5g", "hotstar", "netflix", "data", "pack", "bundle"]):
-            reply = f"The {cart_item} pack offers high-speed data and network connectivity. I can also help you switch to a higher-validity pack or apply a 10% discount on this plan!"
-            return reply, {
-                "tool_called": "recommend_subscription",
-                "objection_type": "subscription_features",
-                "resolution_offered": "Plan feature comparison"
             }
         # 3. Intent to Buy / Request Payment Link for Subscription
         elif any(k in msg for k in ["pay", "buy", "link", "recharge", "checkout", "deal", "yes", "ok", "okay", "send", "sure", "great"]):
@@ -612,7 +639,8 @@ async def run_agent_turn(
                                 "resolution_offered": action_data.get("resolution_offered", "Customer support"),
                                 "payment_link": action_data.get("payment_link"),
                                 "discount_percent": action_data.get("discount_percent"),
-                                "payment_method": action_data.get("payment_method")
+                                "payment_method": action_data.get("payment_method"),
+                                "plans": action_data.get("plans")
                             }
                 else:
                     logger.warning(f"Gemini API returned HTTP {res.status_code}: {res.text}. Falling back.")
@@ -630,5 +658,6 @@ async def run_agent_turn(
         "resolution_offered": action.get("resolution_offered", "Assistance offered"),
         "payment_link": action.get("payment_link"),
         "discount_percent": action.get("discount_percent"),
-        "payment_method": action.get("payment_method")
+        "payment_method": action.get("payment_method"),
+        "plans": action.get("plans")
     }

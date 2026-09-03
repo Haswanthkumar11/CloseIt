@@ -339,6 +339,52 @@ export function ChatWidget({
     }
   };
 
+  const handleSelectPlanFromChat = async (plan) => {
+    setActivePlan(plan);
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: 'user',
+        content: `I'd like to select and recharge with the ${plan.name} (₹${plan.price})`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      }
+    ]);
+    setIsTyping(true);
+
+    try {
+      const res = await fetch(`${API_BASE}/subscription/negotiate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: sessionId || 'default_sub_session',
+          selected_plan_id: plan.id,
+          user_message: 'Send me payment link for this recharge plan',
+          current_discount: currentDiscount
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: 'assistant',
+            content: `Great choice! Switched to ${plan.name} (₹${plan.price}). Here is your secure Razorpay payment link to complete your recharge:`,
+            payment_link: data.payment_link,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }
+        ]);
+      }
+    } catch (err) {
+      console.error('Error selecting plan from chat:', err);
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
+  const handleQuickChipClick = (chipText) => {
+    handleSendMessage(null, chipText);
+  };
+
   const handlePayNowClick = async (url) => {
     window.open(url, '_blank', 'noopener,noreferrer');
 
@@ -505,6 +551,7 @@ export function ChatWidget({
         ) : (
           messages.map((msg, index) => {
             const isAssistant = msg.role === 'assistant';
+            const displayPlans = msg.plans || (msg.recommendations ? msg.recommendations.map(r => r.plan) : null);
             return (
               <div
                 key={index}
@@ -546,6 +593,61 @@ export function ChatWidget({
                     boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
                   }}>
                     {msg.content}
+
+                    {/* Interactive Embedded Plan Cards in Chatbot */}
+                    {displayPlans && displayPlans.length > 0 && (
+                      <div style={{ marginTop: '0.85rem', display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                        {displayPlans.map((p, pIdx) => (
+                          <div key={pIdx} style={{
+                            background: 'rgba(15, 23, 42, 0.85)',
+                            border: '1px solid rgba(99, 102, 241, 0.4)',
+                            borderRadius: '12px',
+                            padding: '0.75rem 0.85rem',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '0.35rem'
+                          }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span style={{ fontWeight: 700, color: '#fff', fontSize: '0.88rem' }}>{p.name}</span>
+                              <span style={{ fontWeight: 800, color: '#34d399', fontSize: '0.95rem' }}>₹{p.price}</span>
+                            </div>
+                            <div style={{ fontSize: '0.75rem', color: '#cbd5e1', display: 'flex', gap: '0.6rem' }}>
+                              <span>⏱️ {p.validity_days || 28} Days</span>
+                              <span>⚡ {p.data_per_day || '2GB/day'}</span>
+                            </div>
+                            {p.ott_benefits && p.ott_benefits.length > 0 && (
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem', marginTop: '0.2rem' }}>
+                                {p.ott_benefits.map((ott, oIdx) => (
+                                  <span key={oIdx} style={{ background: 'rgba(99, 102, 241, 0.25)', color: '#a5b4fc', fontSize: '0.7rem', padding: '0.15rem 0.4rem', borderRadius: '6px' }}>
+                                    🎬 {ott}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            <button
+                              onClick={() => handleSelectPlanFromChat(p)}
+                              style={{
+                                marginTop: '0.35rem',
+                                padding: '0.45rem',
+                                borderRadius: '8px',
+                                border: 'none',
+                                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                                color: '#fff',
+                                fontWeight: 700,
+                                fontSize: '0.8rem',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '0.3rem'
+                              }}
+                            >
+                              <Sparkles size={14} /> Select & Recharge (₹{p.price})
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
 
                     {msg.discount_percent && (
                       <div style={{
@@ -623,25 +725,25 @@ export function ChatWidget({
         {contextType === 'invoice' ? (
           <>
             <button
-              onClick={() => { setInputMessage("I'm having cash-flow issues. Can I pay ₹4,000 now and the rest next month?"); }}
+              onClick={() => handleQuickChipClick("I'm having cash-flow issues. Can I pay ₹4,000 now and the rest next month?")}
               style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-muted)', padding: '0.3rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
             >
               💳 Pay 30% Down (₹4,000)
             </button>
             <button
-              onClick={() => { setInputMessage("Can you give me another 15 days to pay the full amount?"); }}
+              onClick={() => handleQuickChipClick("Can you give me another 15 days to pay the full amount?")}
               style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-muted)', padding: '0.3rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
             >
               📅 15-Day Extension
             </button>
             <button
-              onClick={() => { setInputMessage("Can I pay ₹1,000 now and the remaining amount after 90 days?"); }}
+              onClick={() => handleQuickChipClick("Can I pay ₹1,000 now and the remaining amount after 90 days?")}
               style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-muted)', padding: '0.3rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
             >
               ⚠️ Excessive Request
             </button>
             <button
-              onClick={() => { setInputMessage("Send me payment link for this invoice"); }}
+              onClick={() => handleQuickChipClick("Send me payment link for this invoice")}
               style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-muted)', padding: '0.3rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
             >
               ⚡ Get Payment Link
@@ -650,25 +752,25 @@ export function ChatWidget({
         ) : contextType === 'subscription' ? (
           <>
             <button
-              onClick={() => { setInputMessage(`Is there any discount available on the ${currentTitle}?`); }}
+              onClick={() => handleQuickChipClick(`Is there any discount available on the ${currentTitle}?`)}
               style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-muted)', padding: '0.3rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
             >
               🏷️ Ask for Discount
             </button>
             <button
-              onClick={() => { setInputMessage("Which plans include OTT subscriptions like Hotstar or SonyLIV?"); }}
+              onClick={() => handleQuickChipClick("Which plans include OTT subscriptions like Hotstar or SonyLIV?")}
               style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-muted)', padding: '0.3rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
             >
               🎬 OTT & 5G Options
             </button>
             <button
-              onClick={() => { setInputMessage("Show me longer validity options for my recharge."); }}
+              onClick={() => handleQuickChipClick("Show me longer validity options for my recharge.")}
               style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-muted)', padding: '0.3rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
             >
               📅 More Validity
             </button>
             <button
-              onClick={() => { setInputMessage("Send me payment link for this recharge plan"); }}
+              onClick={() => handleQuickChipClick("Send me payment link for this recharge plan")}
               style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-muted)', padding: '0.3rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
             >
               ⚡ Get Payment Link
@@ -677,19 +779,19 @@ export function ChatWidget({
         ) : (
           <>
             <button
-              onClick={() => { setInputMessage("Is there any discount available?"); }}
+              onClick={() => handleQuickChipClick("Is there any discount available?")}
               style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-muted)', padding: '0.3rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
             >
               🏷️ Ask for Discount
             </button>
             <button
-              onClick={() => { setInputMessage("Can I pay in EMI or UPI?"); }}
+              onClick={() => handleQuickChipClick("Can I pay in EMI or UPI?")}
               style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-muted)', padding: '0.3rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
             >
               💳 EMI / UPI Options
             </button>
             <button
-              onClick={() => { setInputMessage("Send me the payment link"); }}
+              onClick={() => handleQuickChipClick("Send me the payment link")}
               style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-muted)', padding: '0.3rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
             >
               ⚡ Get Payment Link
