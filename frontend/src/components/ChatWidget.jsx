@@ -246,10 +246,51 @@ export function ChatWidget({
   const effectivePrice = currentPrice ? currentPrice * (1 - currentDiscount / 100) : 0;
   const isContextActive = Boolean(currentSelectedItem);
 
+  const hasLoggedOutcomeRef = useRef(false);
+
+  useEffect(() => {
+    hasLoggedOutcomeRef.current = false;
+  }, [currentSelectedItem]);
+
+  const logAbandonedOutcome = async (objectionType = 'abandoned', resolution = 'Customer abandoned session') => {
+    if (hasLoggedOutcomeRef.current) return;
+    hasLoggedOutcomeRef.current = true;
+
+    try {
+      await fetch(`${API_BASE}/log-outcome`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: sessionId || 'demo_session',
+          objection_type: objectionType,
+          resolution: resolution,
+          converted: false,
+          recovered_amount: 0
+        })
+      });
+      if (onOutcomeLogged) onOutcomeLogged();
+    } catch (e) {
+      console.error('Failed to log abandoned outcome:', e);
+    }
+  };
+
+  const handleCloseChatWidget = () => {
+    if (messages.length > 1 && !hasLoggedOutcomeRef.current) {
+      logAbandonedOutcome('chat_closed_unconverted', 'User closed chat widget without converting');
+    }
+    if (onClose) onClose();
+  };
+
   const handleSendMessage = async (e, textOverride = null) => {
     if (e) e.preventDefault();
     const userText = (textOverride || inputMessage).trim();
     if (!userText || isTyping) return;
+
+    // Check if user explicitly declines
+    const lowerText = userText.toLowerCase();
+    if (['no thanks', 'not interested', 'decline', 'cancel', "don't want", 'don’t want'].some(k => lowerText.includes(k))) {
+      logAbandonedOutcome('customer_declined', 'Customer explicitly declined offer');
+    }
 
     const userMsgObj = {
       role: 'user',
@@ -412,6 +453,7 @@ export function ChatWidget({
 
   const handlePayNowClick = async (url) => {
     window.open(url, '_blank', 'noopener,noreferrer');
+    hasLoggedOutcomeRef.current = true;
 
     try {
       await fetch(`${API_BASE}/log-outcome`, {
@@ -486,7 +528,7 @@ export function ChatWidget({
         </div>
 
         <button
-          onClick={onClose}
+          onClick={handleCloseChatWidget}
           style={{
             background: 'rgba(255,255,255,0.15)',
             border: 'none',
