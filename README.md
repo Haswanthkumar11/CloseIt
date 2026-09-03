@@ -14,6 +14,16 @@ CloseIt is a unified, multi-context AI revenue recovery agent embedded across a 
 2. **Smart Recharge & Plan Rescue (`📱 Recharge`)**: Compares telecom recharge plans (Jio, Airtel, Vi) based on factual data (validity, OTT bundles, 5G), negotiates policy-approved discounts, and drives plan upgrades.
 3. **Customer Payment & Credit Hub (`💳 My Payments`)**: Connects storefront credit purchases directly into the customer's personal payment center. Displays upcoming installment alerts (₹1,333 due Oct 1), tracks purchase history, and lets CloseIt negotiate compliant payment plan extensions or partial downpayments.
 
+
+Design Focus: The Agent Is the Product, Not the Catalog
+
+CloseIt is fundamentally a demonstration of agentic negotiation and retention behavior, not a full-scale e-commerce, telecom, or billing platform. The core question this project answers is: can an AI agent keep a customer from walking away — mid-checkout, mid-recharge, or mid-invoice-dispute — by negotiating within strict, merchant-defined limits?
+
+Because of that focus:
+
+Each of the 3 commercial contexts (Shop, Recharge, My Payments) intentionally ships with only 2–3 representative products/plans rather than a full catalog. The catalog exists only to give the agent something concrete to reason about — it is not the deliverable.
+Engineering effort went into the Negotiation Engine, Policy Engine, and objection-handling logic — detecting exit intent, classifying objections, proposing compliant resolutions, and refusing to overstep policy — rather than into storefront breadth, search/filtering, or catalog management features.
+Success for this project is measured by conversion/retention behavior (did the agent recover the interaction, and did it stay within policy while doing so?), not by the size or realism of the underlying storefront.
 ---
 
 ## Unified Multi-Context Architecture
