@@ -212,8 +212,14 @@ Selected Recharge Plan Context:
 - Price: ₹{item_price:,.2f}
 {extra_context}
 
+Available OTT Subscription Packs in Catalog:
+- plan_349: "5G Plus & Streaming Pack" (₹349 / 28 Days) — Includes JioHotstar Mobile, Prime Video Mobile & SonyLIV.
+- plan_839: "Quarterly Pro 2GB + OTT" (₹839 / 84 Days) — Includes 1-Year JioHotstar Mobile.
+- plan_999: "Heavy User Unlimited 5G Pack" (₹999 / 84 Days) — Includes JioHotstar Mobile & Zee5.
+- plan_2999: "Annual Ultra Unlimited 365" (₹2,999 / 365 Days) — Includes 1-Year JioHotstar Premium & Prime Video.
+
 Guidelines:
-1. Explain recommendations using EXACT backend facts provided in extra_context (e.g., "Looking at the ₹349 plan? For ₹50 more, ₹399 gives 28 extra days of validity and OTT benefits"). NEVER invent numbers.
+1. Explain recommendations using EXACT backend facts. NEVER say "I can't provide that information". If the customer asks about OTT apps, streaming, Hotstar, SonyLIV, Prime Video, or 5G, explicitly present the OTT plans listed above!
 2. Keep responses short (1-2 sentences), helpful, and conversational.
 3. If the user wants a better plan or agrees to switch, call function `switch_subscription_plan(new_plan_id)`.
 4. If the user asks for a discount, call `offer_discount(percent)`.
@@ -320,8 +326,16 @@ def fallback_keyword_classifier(
             }
     
     if context_type == "subscription":
-        # 1. Price / Discount Objection for Subscription
-        if any(k in msg for k in ["expensive", "price", "cost", "cheaper", "discount", "budget", "high", "money", "afford", "offer"]):
+        # 1. OTT / Streaming / Validity / 5G Features Inquiry
+        if any(k in msg for k in ["ott", "hotstar", "sonyliv", "prime", "netflix", "zee5", "streaming", "movie", "cinema", "tv", "options"]):
+            reply = "Great question! We have 4 top recharge packs with included OTT subscriptions:\n1. ₹349 Streaming Pack (28 Days) — JioHotstar, Prime Video & SonyLIV\n2. ₹839 Quarterly Pack (84 Days) — 1-Year JioHotstar Mobile\n3. ₹999 Heavy 5G Pack (84 Days) — JioHotstar & Zee5\n4. ₹2,999 Annual Pack (365 Days) — 1-Year JioHotstar Premium & Prime Video\nWhich plan would you like to select?"
+            return reply, {
+                "tool_called": "recommend_subscription",
+                "objection_type": "subscription_ott_inquiry",
+                "resolution_offered": "OTT catalog recommendation provided"
+            }
+        # 2. Price / Discount Objection for Subscription
+        elif any(k in msg for k in ["expensive", "price", "cost", "cheaper", "discount", "budget", "high", "money", "afford", "offer"]):
             discount = 10
             new_price = round(base_price * (1 - (discount / 100)), 2)
             reply = f"I completely understand! How about an exclusive 10% instant discount on the {cart_item} plan? That brings it down to ₹{new_price:,.0f}."
