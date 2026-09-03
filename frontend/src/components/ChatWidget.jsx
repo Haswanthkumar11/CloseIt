@@ -77,6 +77,13 @@ export function ChatWidget({
         setActivePlan(selectedPlan);
         setCurrentDiscount(0);
 
+        const subOptions = [
+          { label: '🏷️ Request Instant Discount', prompt: `Is there any discount available on the ${selectedPlan.name}?` },
+          { label: '🎬 View OTT & 5G Subscription Packs', prompt: 'Which plans include OTT subscriptions like Hotstar or SonyLIV?' },
+          { label: '📅 Explore Longer Validity Packs', prompt: 'Show me longer validity options for my recharge.' },
+          { label: '⚡ Generate Razorpay Payment Link', prompt: 'Send me payment link for this recharge plan' }
+        ];
+
         const fetchRecs = async () => {
           try {
             const res = await fetch(`${API_BASE}/subscription/recommendations/${selectedPlan.id}`);
@@ -88,7 +95,8 @@ export function ChatWidget({
               setMessages([
                 {
                   role: 'assistant',
-                  content: `Hey! I noticed you selected the ₹${selectedPlan.price} plan (${selectedPlan.name}).\nI'm your AI Recharge Assistant! Before you proceed, here are top recommendations and exclusive discount options:`,
+                  content: `Hey! I noticed you selected the ₹${selectedPlan.price} plan (${selectedPlan.name}). I'm your AI Recharge Assistant! How would you like to proceed? Click an option below or ask me anything:`,
+                  options: subOptions,
                   recommendations: recs,
                   timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                 }
@@ -97,7 +105,8 @@ export function ChatWidget({
               setMessages([
                 {
                   role: 'assistant',
-                  content: `Hey! I noticed you selected the ₹${selectedPlan.price} plan (${selectedPlan.name}). Ask me for exclusive discounts, OTT bundles, or validity upgrades!`,
+                  content: `Hey! I noticed you selected the ₹${selectedPlan.price} plan (${selectedPlan.name}). I'm your AI Recharge Assistant! How would you like to proceed? Click an option below:`,
+                  options: subOptions,
                   timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                 }
               ]);
@@ -108,7 +117,8 @@ export function ChatWidget({
             setMessages([
               {
                 role: 'assistant',
-                content: `Hey! I noticed you selected the ₹${selectedPlan.price} plan (${selectedPlan.name}). Ask me for exclusive discounts, OTT bundles, or validity upgrades!`,
+                content: `Hey! I noticed you selected the ₹${selectedPlan.price} plan (${selectedPlan.name}). I'm your AI Recharge Assistant! How would you like to proceed? Click an option below:`,
+                options: subOptions,
                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
               }
             ]);
@@ -131,9 +141,17 @@ export function ChatWidget({
         setCurrentDiscount(0);
         const planTitle = selectedInvoice.product_name || selectedInvoice.description || 'Credit Purchase Plan';
         const planAmount = selectedInvoice.installment_amount || selectedInvoice.amount || 1166.33;
+        const invOptions = [
+          { label: '💳 Pay 30% Down (Upfront)', prompt: "I'm having cash-flow issues. Can I pay 30% now and the rest next month?" },
+          { label: '📅 Request 15-Day Extension', prompt: 'Can you give me another 15 days to pay the full amount?' },
+          { label: '⚠️ Test Excessive Request (Policy Block)', prompt: 'Can I pay ₹1,000 now and the remaining amount after 90 days?' },
+          { label: '⚡ Generate Razorpay Payment Link', prompt: 'Send me payment link for this invoice' }
+        ];
+
         const greetingMsg = {
           role: 'assistant',
-          content: `Hello! I am CloseIt, your personal payment advisor for ${planTitle}.\nRegarding your upcoming installment of ₹${(planAmount || 0).toLocaleString('en-IN')}, I can help adjust payment dates, structure partial downpayments, or answer any questions about your plan!`,
+          content: `Hello! I am CloseIt, your personal payment advisor for ${planTitle}.\nRegarding your upcoming installment of ₹${(planAmount || 0).toLocaleString('en-IN')}, how would you like to structure your payment schedule? Click an option below:`,
+          options: invOptions,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
 
@@ -160,10 +178,17 @@ export function ChatWidget({
       // Context: 'checkout' (Shop page)
       if (cartItem) {
         setCurrentDiscount(0);
+        const shopOptions = [
+          { label: '🏷️ Ask for 10% Instant Discount', prompt: 'Is there any discount available?' },
+          { label: '💳 Explore EMI / UPI Options', prompt: 'Can I pay in EMI or UPI?' },
+          { label: '⚡ Generate Razorpay Payment Link', prompt: 'Send me the payment link' }
+        ];
+
         setMessages([
           {
             role: 'assistant',
-            content: `Hey! I noticed you selected the ${cartItem} (₹${(cartPrice || 0).toLocaleString('en-IN')}). I'm your AI Checkout Assistant! Is there anything holding you back from ordering? Ask me for exclusive discounts or 3-month payment plan options!`,
+            content: `Hey! I noticed you selected the ${cartItem} (₹${(cartPrice || 0).toLocaleString('en-IN')}). I'm your AI Checkout Assistant! How can I help you close this purchase today? Click an option below:`,
+            options: shopOptions,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
           }
         ]);
@@ -593,6 +618,45 @@ export function ChatWidget({
                     boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
                   }}>
                     {msg.content}
+
+                    {/* In-Chat Interactive Quick Options */}
+                    {msg.options && msg.options.length > 0 && (
+                      <div style={{ marginTop: '0.85rem', display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+                        <div style={{ fontSize: '0.75rem', color: '#cbd5e1', fontWeight: 600, marginBottom: '0.1rem' }}>
+                          Select an option to ask CloseIt:
+                        </div>
+                        {msg.options.map((opt, optIdx) => (
+                          <button
+                            key={optIdx}
+                            onClick={() => handleQuickChipClick(opt.prompt)}
+                            style={{
+                              padding: '0.55rem 0.85rem',
+                              borderRadius: '10px',
+                              border: '1px solid rgba(255, 255, 255, 0.15)',
+                              background: 'rgba(255, 255, 255, 0.08)',
+                              color: '#fff',
+                              fontWeight: 600,
+                              fontSize: '0.82rem',
+                              textAlign: 'left',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between'
+                            }}
+                            onMouseOver={(e) => {
+                              e.currentTarget.style.background = contextType === 'invoice' ? '#d97706' : contextType === 'subscription' ? '#059669' : 'var(--primary-accent)';
+                            }}
+                            onMouseOut={(e) => {
+                              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
+                            }}
+                          >
+                            <span>{opt.label}</span>
+                            <span style={{ fontSize: '0.75rem', opacity: 0.8 }}>➔</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
 
                     {/* Interactive Embedded Plan Cards in Chatbot */}
                     {displayPlans && displayPlans.length > 0 && (
